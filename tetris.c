@@ -1,9 +1,109 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 // Desafio Tetris Stack
 // Tema 3 - Integração de Fila e Pilha
 // Este código inicial serve como base para o desenvolvimento do sistema de controle de peças.
 // Use as instruções de cada nível para desenvolver o desafio.
+
+#define TAM_FILA 5
+
+// ----- Estrutura da peça -----
+typedef struct {
+    char nome; // I, O, T, L
+    int id;
+} Peca;
+
+// ----- Estrutura da fila circular -----
+typedef struct {
+    Peca itens[TAM_FILA];
+    int inicio;
+    int fim;
+    int tamanho;
+} Fila;
+
+// ----- Variável global para ID único -----
+int contadorID = 0;
+
+// ----- Tipos possíveis -----
+char tipos[] = {'I', 'O', 'T', 'L'};
+
+// ----- Gerar peça automaticamente -----
+Peca gerarPeca() {
+    Peca p;
+    p.nome = tipos[rand() % 4];
+    p.id = contadorID++;
+    return p;
+}
+
+// ----- inicializar fila -----
+void inicializarFila(Fila *f) {
+    f->inicio = 0;
+    f->fim = 0;
+    f->tamanho = 0;
+}
+
+// ----- Verificações -----
+int filaCheia(Fila *f) {
+    return f->tamanho == TAM_FILA;
+}
+
+int filaVazia(Fila *f) {
+    return f->tamanho == 0;
+}
+
+// ----- Enqueue -----
+void enqueue(Fila *f, Peca p) {
+    if (filaCheia(f)) {
+        printf("Fila cheia! Não é possível inserir.\n");
+        return;
+    }
+
+    f->itens[f->fim] = p;
+    f->fim = (f->fim + 1) % TAM_FILA;
+    f->tamanho++;
+}
+
+// ----- Dequeue -----
+void dequeue(Fila *f) {
+    if (filaVazia(f)) {
+        printf("Fila vazia! Nada para remover.\n");
+        return;
+    }
+
+    Peca removida = f->itens[f->inicio];
+    printf("Peca removida: [%c %d]\n", removida.nome, removida.id);
+
+    f->inicio = (f->inicio + 1) % TAM_FILA;
+    f->tamanho--;
+}
+
+// ----- Exibir fila -----
+void exibirFila(Fila *f) {
+    printf("\nFila de pecas:\n");
+
+    if (filaVazia(f)) {
+        printf("[Vazia]\n");
+        return;
+    }
+
+    int i, idx = f->inicio;
+
+    for (i = 0; i < f->tamanho; i++) {
+        printf("[%c %d] ", f->itens[idx].nome, f->itens[idx].id);
+        idx = (idx + 1)  % TAM_FILA;
+    }
+
+    printf("\n");
+}
+
+// ----- Preencher fila inicial -----
+void preencherInicial(Fila *f) {
+    for (int i = 0; i < TAM_FILA; i++) {
+        enqueue(f, gerarPeca());
+    }
+}
 
 int main() {
 
@@ -18,7 +118,41 @@ int main() {
     //      1 - Jogar peça (remover da frente)
     //      0 - Sair
     // - A cada remoção, insira uma nova peça ao final da fila.
+    Fila fila;
+    int opcao;
 
+    srand(time(NULL));
+
+    inicializarFila(&fila);
+    preencherInicial(&fila);
+
+    do {
+        exibirFila(&fila);
+
+        printf("\n1 - Jogar peca (dequeue)\n");
+        printf("2 - Inserir nova peca (enqueue)\n");
+        printf("0 - Sair\n");
+        printf("Opcao: ");
+        scanf("%d", &opcao);
+
+        switch (opcao) {
+            case 1:
+                dequeue(&fila);
+                enqueue(&fila, gerarPeca());
+                break;
+
+            case 2:
+                enqueue(&fila, gerarPeca());
+                break;
+
+            case 0:
+                printf("Encerrando...\n");
+                break;
+
+            default:
+                printf("Opcao invalida!\n");
+        }
+    } while (opcao != 0);
 
 
     // 🧠 Nível Aventureiro: Adição da Pilha de Reserva
@@ -53,4 +187,3 @@ int main() {
 
     return 0;
 }
-
