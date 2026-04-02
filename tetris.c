@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 // Desafio Tetris Stack
@@ -30,15 +31,20 @@ typedef struct {
     int topo;
 } Pilha;
 
+// ----- Estado -----
+typedef struct {
+    Fila fila;
+    Pilha pilha;
+    int valido; // 1 se o estado é válido, 0 caso contrário
+} Estado;
+
 // ----- Controle global -----
 int contadorID = 0;
 char tipos[] = {'I', 'O', 'T', 'L'};
 
 // ----- Gerar peça automaticamente -----
 Peca gerarPeca() {
-    Peca p;
-    p.nome = tipos[rand() % 4];
-    p.id = contadorID++;
+    Peca p = {tipos[rand()%4], contadorID++};
     return p;
 }
 
@@ -59,14 +65,16 @@ int filaVazia(Fila *f) {
 }
 
 // ----- Enqueue -----
-void enqueue(Fila *f, Peca p) {
+int enqueue(Fila *f, Peca p) {
     if (filaCheia(f)) {
-        return;
+        return 0;
     }
 
     f->itens[f->fim] = p;
     f->fim = (f->fim + 1) % TAM_FILA;
     f->tamanho++;
+
+    return 1;
 }
 
 // ----- Dequeue -----
@@ -97,24 +105,88 @@ int pilhaVazia(Pilha *p) {
     return p->topo == -1;
 }
 
-void push(Pilha *p, Peca x) {
+int push(Pilha *p, Peca x) {
     if (pilhaCheia(p)) {
-        printf("Pilha cheia! Não pode reservar.\n");
-        return;
+        return 0;
     }
-    
+
     p->itens[++p->topo] = x;
+    return 1;
 }
 
 Peca pop(Pilha *p) {
     Peca vazio = {'-', -1};
 
     if (pilhaVazia(p)) {
-        printf("Pilha vazia!\n");
         return vazio;
     }
 
     return p->itens[p->topo--];
+}
+
+// ===== ESTADO (UNDO) =====
+void salvarEstado(Estado *e, Fila *f, Pilha *p) {
+    e->fila = *f;
+    e->pilha = *p;
+    e->valido = 1;
+}
+
+void restaurarEstado(Estado *e, Fila *f, Pilha *p) {
+    if (!e->valido) {
+        printf("Nada para desfazer!\n");
+        return;
+    }
+
+    *f = e->fila;
+    *p = e->pilha;
+    e->valido = 0; // só pode restaurar uma vez.
+    printf("Acao desfeita!\n");
+}
+
+// ===== TROCAS =====
+int trocarTopo(Fila *f, Pilha *p) {
+    if (filaVazia(f) || pilhaVazia(p)) {
+        return 0;
+    }
+
+    int i = f->inicio;
+    Peca temp = f->itens[i];
+    f->itens[i] = p->itens[p->topo];
+    p->itens[p->topo] = temp;
+
+    return 1;
+}
+
+int trocarTres(Fila *f, Pilha *p) {
+    if (p->topo != 2 || f->tamanho < 3) {
+        return 0;
+    }
+
+    for (int i = 0; i < 3; i++) {
+        int fi = (f->inicio + i) % TAM_FILA;
+        Peca temp = f->itens[fi];
+        f->itens[fi] = p->itens[2 - i];
+        p->itens[2 - i] = temp;
+    }
+
+    return 1;
+}
+
+
+// ===== INVERTER =====
+int inverter(Fila *f, Pilha *p) {
+    if (p->topo != 2 || f->tamanho < 3) {
+        return 0;
+    }
+
+    for (int i = 0; i < 3; i++) {
+        int fi = (f->inicio + i) % TAM_FILA;
+        Peca temp = f->itens[fi];
+        f->itens[fi] = p->itens[i]; // base -> topo
+        p->itens[i] = temp;
+    }
+
+    return 1;
 }
 
 // ----- EXIBIÇÃO -----
@@ -175,86 +247,7 @@ int main() {
     //      3 - Usar peça da reserva (remover do topo da pilha)
     // - Exiba a pilha junto com a fila após cada ação com mostrarPilha().
     // - Mantenha a fila sempre com 5 peças (repondo com gerarPeca()).
-    Fila fila;
-    Pilha pilha;
-    int opcao;
-
-    srand(time(NULL));
-
-    inicializarFila(&fila);
-    inicializarPilha(&pilha);
-
-    // preencher fila inicial
-    for (int i = 0; i < TAM_FILA; i++) {
-        enqueue(&fila, gerarPeca());
-    }
-
-    do {
-        exibirFila(&fila);
-        exibirPilha(&pilha);
-
-        printf("\n\n1 - Jogar peca");
-        printf("\n2 - Reservar peca");
-        printf("\n3 - Usar peca reservada");
-        printf("\n0 - Sair");
-        printf("\nOpcao: ");
-
-        if (scanf("%d", &opcao) != 1) {
-            while (getchar() != '\n');
-            opcao = -1;
-        }
-
-        switch (opcao) {
-            case 1: {
-                if (!filaVazia(&fila)) {
-                    Peca p = dequeue(&fila);
-
-                    if (p.id != -1) {
-                        printf("Jogou: [%c %d]\n", p.nome, p.id);
-                        enqueue(&fila, gerarPeca());
-                    }
-                }
-                break;
-            }
-
-            case 2: {
-                if (!pilhaCheia(&pilha) && !filaVazia(&fila)) {
-                    Peca p = dequeue(&fila);
-                    
-                    if (p.id != -1) {
-                        push(&pilha, p);
-                        printf("Reservou: [%c %d]\n", p.nome, p.id);
-                        enqueue(&fila, gerarPeca());
-                    }
-                } else {
-                    printf("Nao foi possivel reservar!\n");
-                }
-                break;
-            }
-
-            case 3: {
-                if (!pilhaVazia(&pilha)) {
-                    Peca p = pop(&pilha);
-                    
-                    if (p.id != -1) {
-                        printf("Usou reserva: [%c %d]\n", p.nome, p.id);
-                        enqueue(&fila, gerarPeca());
-                    }
-                } else {
-                    printf("Nada na reserva!\n");
-                }
-                break;
-            }
-
-            case 0:
-                printf("Encerrando...\n");
-                break;
-
-            default:
-                printf("Opcao invalida!\n");
-        }
-    } while (opcao != 0);
-
+    
 
     // 🔄 Nível Mestre: Integração Estratégica entre Fila e Pilha
     //
@@ -272,7 +265,106 @@ int main() {
     // - O menu deve ficar assim:
     //      4 - Trocar peça da frente com topo da pilha
     //      5 - Trocar 3 primeiros da fila com os 3 da pilha
+    Fila fila;
+    Pilha pilha;
+    Estado ultimo = {0};
+    int opcao;
 
+    srand(time(NULL));
+
+    inicializarFila(&fila);
+    inicializarPilha(&pilha);
+
+    for (int i = 0; i < TAM_FILA; i++) {
+        enqueue(&fila, gerarPeca());
+    }
+
+    do {
+        exibirFila(&fila);
+        exibirPilha(&pilha);
+
+        printf("\n1 - Jogar peça (remover da frente)");
+        printf("\n2 - Enviar peça da fila para a reserva (pilha)\n");
+        printf("\n3 - Usar peça da reserva (remover do topo da pilha)\n");
+        printf("\n4 - Trocar peça da frente com topo da pilha\n");
+        printf("\n5 - Trocar 3 primeiros da fila com os 3 da pilha\n");
+        printf("\n6 - Desfazer última ação\n");
+        printf("\n7 - Inverter os 3 primeiros da fila com os 3 da pilha\n");
+        printf("\n0 - Sair\n");
+        printf("Escolha uma opção: ");
+
+        if (scanf("%d", &opcao) != 1) {
+            while (getchar() != '\n'); // limpar entrada
+            opcao = -1; // opção inválida
+        }
+
+        switch (opcao) {
+            case 1: { // Jogar peça
+                if (!filaVazia(&fila)) {
+                    salvarEstado(&ultimo, &fila, &pilha);
+                    Peca p = dequeue(&fila);
+                    printf("Jogou [%c %d]\n", p.nome, p.id);
+                    enqueue(&fila, gerarPeca());
+                } else printf("Fila vazia!\n");
+                break;
+            }
+
+            case 2: { // Reservar peça
+                if (!pilhaCheia(&pilha) && !filaVazia(&fila)) {
+                    salvarEstado(&ultimo, &fila, &pilha);
+                    Peca p = dequeue(&fila);
+                    push(&pilha, p);
+                    printf("Reservou [%c %d]\n", p.nome, p.id);
+                    enqueue(&fila, gerarPeca());
+                } else printf("Nao foi possivel reservar!\n");
+                break;
+            }
+
+            case 3: { // Usar peça da reserva
+                if (!pilhaVazia(&pilha)) {
+                    salvarEstado(&ultimo, &fila, &pilha);
+                    Peca p = pop(&pilha);
+                    printf("Usou [%c %d]\n", p.nome, p.id);
+                } else printf("Pilha vazia!\n");
+                break;
+            }
+
+            case 4: // Trocar topo
+                if (!filaVazia(&fila) && !pilhaVazia(&pilha)) {
+                    salvarEstado(&ultimo, &fila, &pilha);
+                    trocarTopo(&fila, &pilha);
+                    printf("Troca realizada!\n");
+                } else printf("Nao pode trocar!\n");
+                break;
+
+            case 5: // Trocar 3
+                if (pilha.topo == 2 && fila.tamanho >= 3) {
+                    salvarEstado(&ultimo, &fila, &pilha);
+                    trocarTres(&fila, &pilha);
+                    printf("Troca dos 3!\n");
+                } else printf("Nao pode trocar!\n");
+                break;
+            
+            case 7: // Inverter
+               if (pilha.topo == 2 && fila.tamanho >= 3) {
+                salvarEstado(&ultimo, &fila, &pilha);
+                inverter(&fila, &pilha);
+                printf("Invertido!\n");
+               } else printf("Nao pode inverter!\n");
+               break;
+
+            case 6: // Restaurar estado
+                restaurarEstado(&ultimo, &fila, &pilha);
+                break;            
+
+            case 0:
+                printf("Saindo...\n");
+                break;
+
+            default:
+                printf("Opção inválida!\n");
+        }
+    } while (opcao != 0);
 
     return 0;
 }
